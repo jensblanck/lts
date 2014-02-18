@@ -35,9 +35,7 @@ main = do
   let l = either undefined convert $ parseLts (fromMaybe "(stdin)" i) c
   outh <- maybe (return stdout) (`openFile` WriteMode) o
   hPutStrLn outh $ show l
-  let l' = minStep l (S.singleton $ processes l)
-  hPutStrLn outh $ show l'
-  hPutStrLn outh . show $ minStep l l'
+  hPutStrLn outh . show $ minimiseLts l
   when (isJust i) $ hClose inh
   when (isJust o) $ hClose outh
 

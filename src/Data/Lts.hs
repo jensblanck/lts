@@ -166,11 +166,11 @@ minStep l cs =
       a = M.fromSet colourMap $ processes l
   in S.fromList . M.elems . inverseMap $ a
 
---minimiseLts :: Lts -> Lts
+minimiseLts :: Lts -> Lts
 minimiseLts l =
   let as = alphabet l
       cs = iterate (minStep l) (S.singleton $ processes l)
       c = fst . head . dropWhile (\(a,b) -> a /= b) $ zip cs (tail cs)
-      f :: Colour -> Action -> Set (Process, Action)
-      f s a = S.map (flip (,) a) . smash . colours c $ successors l (S.findMin s) a
-  in M.fromSet (\s -> map f s as) c
+      f :: Process -> Action -> Set (Process, Action)
+      f p a = S.map (flip (,) a) . smash . colours c $ successors l (S.singleton $ S.findMin p) a
+  in Lts . M.fromSet (\p -> setUnion $ S.map (f p) as) $ smash c
