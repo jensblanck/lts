@@ -32,9 +32,12 @@ main = do
   let o = output args
   inh <- maybe (return stdin) (`openFile` ReadMode) i
   c <- hGetContents inh
-  let s = either (error . show) (show . convert) $ parseLts (fromMaybe "(stdin)" i) c
+  let l = either undefined convert $ parseLts (fromMaybe "(stdin)" i) c
   outh <- maybe (return stdout) (`openFile` WriteMode) o
-  hPutStrLn outh s
+  hPutStrLn outh $ show l
+  let l' = minStep l (S.singleton $ processes l)
+  hPutStrLn outh $ show l'
+  hPutStrLn outh . show $ minStep l l'
   when (isJust i) $ hClose inh
   when (isJust o) $ hClose outh
 

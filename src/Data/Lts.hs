@@ -4,7 +4,7 @@ module Data.Lts where
 import           Control.Applicative hiding (empty)
 import           Control.Monad
 import           Data.Function       (on)
-import           Data.List           (foldl', foldl1', intercalate, reverse)
+import           Data.List           (foldl', foldl1', groupBy, intercalate, reverse, sortBy)
 import           Data.Map            (Map, (!))
 import qualified Data.Map            as M
 import           Data.Maybe          (fromMaybe)
@@ -46,6 +46,7 @@ showChoice = intercalate "+" . map show
 
 --
 
+parseLts :: SourceName -> String -> Either ParseError [Rule]
 parseLts = parse rules
 
 convert :: [Rule] -> Lts
@@ -131,13 +132,30 @@ processes (Lts l) = M.keysSet l
 successors :: Lts -> Process -> Action -> Set Process
 successors l p a = S.map fst . S.filter (\(_,a') -> a' == a) . M.findWithDefault S.empty p $ lts l
 
--- minStep :: Lts -> Set (Set Process) -> Set (Set Process)
+{-- Does one step of the lts minimisation. Given a colouring encoded as a partition of `Process`es this computes a new colouring that separates any `Process`es that can be differentiated by one action step.
+-}
+minStep :: Lts -> Set (Set Process) -> Set (Set Process)
 minStep l s =
     let ps = processes l
         as = alphabet l
+        -- findIn looks up all colours represented by a set of `Process`es.
         findIn s ns = S.fold S.union S.empty $ S.map (\p -> S.fold S.union S.empty $ S.map (\s' -> if S.member p s' then s' else S.empty) s) ns
-        findDest p = S.map (\a -> (a, findIn s $ successors l p a)) as
-    in S.map findDest ps
+        -- findDest computes a pair of (a set of pairs of an action and all colours reachable via that action) and a `Process`.
+        findDest p = (S.map (\a -> (a, findIn s $ successors l p a)) as, p)
+        a = S.map findDest ps
+        -- Groups together `Process`es that still are indistinguishable by what colours are reachable.
+        b = groupBy (\a b -> fst a == fst b) . sortBy (compare `on` fst) . S.toList $ a
+        -- Extracts the colouring by forgetting non-relevant information.
+        c = map (map snd) b
+    in S.fromList . map S.fromList $ c
+
+minimiseLts :: Lts -> Lts
+minimiseLts l =
+    let cs = iterate (minStep l) (S.singleton $ processes l)
+        c = fst . head . dropWhile (\(a,b) -> a /= b) $ zip cs (tail cs)
+        trans = M.fromList [(p, Multi . S.fold S.union S.empty $ S.map (\c' -> if S.member p c' then c' else S.empty) c) | p <- S.toList $ processes l ]
+        buildLts cs = undefined
+    in undefined
 
 --minimiseStep :: Lts -> Lts
 minimiseStep l = M.fromList . map swap . M.assocs . M.fromListWith (\_ a -> a) . map swap . M.assocs $ lts l
