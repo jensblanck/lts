@@ -14,27 +14,32 @@ import qualified Data.Set            as S
 import           Text.Parsec         hiding (choice, many, optional, (<|>))
 import           Text.Parsec.String  (Parser)
 
+-- Lts types
+
 type Variable = String
 type Action = String
 type ProcessName = String
-data Process = Single ProcessName
-               | Multi (Set ProcessName)
-    deriving (Eq,Ord,Read,Show)
-type Choice = [Expr]
+type Process = Set ProcessName
+type Epsilon = (Process, Process)
+type Colour = Set Process
+type Colouring = Set Colour
+
 newtype Lts = Lts {lts :: Map Process (Set (Process, Action))}
     deriving (Eq,Ord,Read,Show)
-type Epsilon = (Process, Process)
-
 instance Monoid Lts where
   mempty = Lts M.empty
   mappend (Lts a) (Lts b) = Lts $ M.unionWith S.union a b
+
 type Info = (Set Process, Lts, Set Epsilon)
+
+--Parsing types
 
 data Expr = Nil
           | Bracket Choice
           | Act Action Expr
           | Var Variable deriving (Eq,Ord,Read)
 data Rule = Rule Variable Choice deriving (Eq,Ord,Show,Read)
+type Choice = [Expr]
 
 instance Show Expr where
   show Nil = "0"
@@ -53,32 +58,32 @@ convert :: [Rule] -> Lts
 convert = addZeros . satisfyEpsilon . info
 
 addZeros :: Info -> Lts
-addZeros (s,Lts l,_) = Lts $ l <> fromSet s
-  -- M.fromSet (const mempty) s
-  where fromSet s = M.fromList . S.toList . S.map (\k -> (k, S.empty)) $ s
+addZeros (s,Lts l,_) = Lts $ l <> M.fromSet (const mempty) s
+-- fromSet s
+--   where fromSet s = M.fromList . S.toList . S.map (\k -> (k, S.empty)) $ s
 
 info :: [Rule] -> Info
 info = mconcat . map infoRule
 
 infoRule :: Rule -> Info
 infoRule (Rule v e) =
-    mconcat $ (S.singleton (Single v), mempty, mempty) : map (infoExpr (Single v) (Just $ Single v)) e
+  mconcat $ (S.singleton (process v), mempty, mempty) : map (infoExpr (process v) (Just $ process v)) e
 
 infoExpr :: Process -> Maybe Process -> Expr -> Info
-infoExpr _ _ Nil = (S.singleton (Single "0"), mempty, mempty)
+infoExpr _ _ Nil = (S.singleton (process "0"), mempty, mempty)
 infoExpr v mv (Bracket e) =
-  let mv' = Just $ fromMaybe (Single $ showChoice e) mv
+  let mv' = Just $ fromMaybe (process $ showChoice e) mv
   in mconcat $ map (infoExpr v mv') e
 infoExpr v _ (Act l e) =
-  let v' = Single $ case e of
+  let v' = process $ case e of
              (Bracket e') -> showChoice e'
              _ -> show e
   in (S.singleton v', Lts $ M.singleton v (S.singleton (v',l)), mempty)
          <> infoExpr v' Nothing e
-infoExpr _ Nothing (Var v') = (S.singleton (Single v'), mempty, mempty)
-infoExpr _ (Just v) (Var v') = (S.singleton (Single v')
+infoExpr _ Nothing (Var v') = (S.singleton (process v'), mempty, mempty)
+infoExpr _ (Just v) (Var v') = (S.singleton (process v')
                                , mempty
-                               , S.singleton (v, Single v'))
+                               , S.singleton (v, process v'))
 
 satisfyEpsilon :: Info -> Info
 satisfyEpsilon i@(ps, a, es) =
@@ -87,6 +92,9 @@ satisfyEpsilon i@(ps, a, es) =
                                                 (M.singleton p))
                                          (M.lookup p' m)
   in if a == a' then i else satisfyEpsilon (ps, a', es)
+
+process :: ProcessName -> Process
+process = S.singleton
 
 -- Parsing using applicative style
 
@@ -132,31 +140,37 @@ processes (Lts l) = M.keysSet l
 successors :: Lts -> Process -> Action -> Set Process
 successors l p a = S.map fst . S.filter (\(_,a') -> a' == a) . M.findWithDefault S.empty p $ lts l
 
-{-- Does one step of the lts minimisation. Given a colouring encoded as a partition of `Process`es this computes a new colouring that separates any `Process`es that can be differentiated by one action step.
--}
-minStep :: Lts -> Set (Set Process) -> Set (Set Process)
-minStep l s =
-    let ps = processes l
-        as = alphabet l
-        -- findIn looks up all colours represented by a set of `Process`es.
-        findIn s ns = S.fold S.union S.empty $ S.map (\p -> S.fold S.union S.empty $ S.map (\s' -> if S.member p s' then s' else S.empty) s) ns
-        -- findDest computes a pair of (a set of pairs of an action and all colours reachable via that action) and a `Process`.
-        findDest p = (S.map (\a -> (a, findIn s $ successors l p a)) as, p)
-        a = S.map findDest ps
-        -- Groups together `Process`es that still are indistinguishable by what colours are reachable.
-        b = groupBy (\a b -> fst a == fst b) . sortBy (compare `on` fst) . S.toList $ a
-        -- Extracts the colouring by forgetting non-relevant information.
-        c = map (map snd) b
-    in S.fromList . map S.fromList $ c
+-- Cell of partition. A colouring is a partition of the processes.
+cell :: Ord a => Set (Set a) -> a -> Set a
+cell p e = S.foldr (\c s -> if e `S.member` c then c else s) S.empty p
 
-minimiseLts :: Lts -> Lts
+inverseMap :: (Ord a, Ord k) => Map k a -> Map a (Set k)
+inverseMap = M.foldrWithKey (\ k a m -> M.insertWith S.union a (S.singleton k) m) M.empty
+
+colours :: Colouring -> Set Process -> Set Colour
+colours c = S.map (cell c)
+
+setUnion :: Ord a => Set (Set a) -> Set a
+setUnion = S.fold S.union S.empty
+
+smash :: Set Colour -> Set Process
+smash = S.map setUnion
+
+{-- Does one step of the lts minimisation. Given a colouring encoded as a
+partition of `Process`es this computes a new colouring that separates any
+`Process`es that can be differentiated by one action step.  -}
+
+minStep :: Lts -> Colouring -> Colouring
+minStep l cs =
+  let colourMap p = M.fromSet (setUnion . colours cs . successors l p) $ alphabet l
+      a = M.fromSet colourMap $ processes l
+  in S.fromList . M.elems . inverseMap $ a
+
+--minimiseLts :: Lts -> Lts
 minimiseLts l =
-    let cs = iterate (minStep l) (S.singleton $ processes l)
-        c = fst . head . dropWhile (\(a,b) -> a /= b) $ zip cs (tail cs)
-        trans = M.fromList [(p, Multi . S.fold S.union S.empty $ S.map (\c' -> if S.member p c' then c' else S.empty) c) | p <- S.toList $ processes l ]
-        buildLts cs = undefined
-    in undefined
-
---minimiseStep :: Lts -> Lts
-minimiseStep l = M.fromList . map swap . M.assocs . M.fromListWith (\_ a -> a) . map swap . M.assocs $ lts l
-  where swap (a,b) = (b,a)
+  let as = alphabet l
+      cs = iterate (minStep l) (S.singleton $ processes l)
+      c = fst . head . dropWhile (\(a,b) -> a /= b) $ zip cs (tail cs)
+      f :: Colour -> Action -> Set (Process, Action)
+      f s a = S.map (flip (,) a) . smash . colours c $ successors l (S.findMin s) a
+  in M.fromSet (\s -> map f s as) c
