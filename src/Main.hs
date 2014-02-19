@@ -11,6 +11,7 @@ import           System.Console.CmdArgs
 import           System.IO
 
 import           Data.Lts
+import           Data.LtsPretty
 
 -- CmdArgs
 
@@ -34,8 +35,8 @@ main = do
   c <- hGetContents inh
   let l = either undefined convert $ parseLts (fromMaybe "(stdin)" i) c
   outh <- maybe (return stdout) (`openFile` WriteMode) o
-  hPutStrLn outh $ show l
-  hPutStrLn outh . show $ minimiseLts l
+  hPutStrLn outh $ renderLts l
+  hPutStrLn outh . renderLts $ minimiseLts l
   when (isJust i) $ hClose inh
   when (isJust o) $ hClose outh
 

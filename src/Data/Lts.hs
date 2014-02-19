@@ -49,7 +49,7 @@ instance Show Expr where
 
 showChoice = intercalate "+" . map show
 
---
+-- Parsing lts equations
 
 parseLts :: SourceName -> String -> Either ParseError [Rule]
 parseLts = parse rules
