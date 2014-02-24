@@ -32,6 +32,15 @@ instance Monoid Lts where
 
 type Info = (Set Process, Lts, Set Epsilon)
 
+--Hennessy-Milner Logic
+
+data HML = Diamond (Set Action) HML
+         | Box (Set Action) HML
+         | Or HML HML
+         | And HML HML
+         | Neg HML
+         | Atom Bool deriving (Eq,Ord,Read,Show)
+
 --Parsing types
 
 data Expr = Nil
@@ -174,3 +183,11 @@ minimiseLts l =
       f :: Process -> Action -> Set (Process, Action)
       f p a = S.map (flip (,) a) . smash . colours c $ successors l (S.singleton $ S.findMin p) a
   in Lts . M.fromSet (\p -> setUnion $ S.map (f p) as) $ smash c
+
+-- Hennessy-Milner Logic
+
+valid :: Lts -> Process -> HML -> Bool
+valid _ _ (Atom b) = b
+valid l p (Box as hml) =
+  let ps = S.foldl S.union S.empty $ S.map (successors l p) as
+  in S.foldl (&&) True (S.map (flip (valid l) hml) ps)
