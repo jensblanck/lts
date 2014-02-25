@@ -140,11 +140,23 @@ rules = rule `sepEndBy1` ruleEnd
 
 -- Lts manipulation
 
+defaultName :: Process -> ProcessName
+defaultName = head . S.toList
+
 alphabet :: Lts -> Set Action
 alphabet (Lts l) = S.map snd . foldl1' S.union $ M.elems l
 
 processes :: Lts -> Set Process
 processes (Lts l) = M.keysSet l
+
+nodes :: Lts -> [(String, [String])]
+nodes = map ((\n -> (head n, n)) . S.toList) . S.toList . processes
+
+arcs :: Lts -> [(String, String, String)]
+arcs (Lts l) =
+  let as = M.assocs l
+      f (p, es) = map (\(p', a) -> (defaultName p, defaultName p', a)) $ S.toList es
+  in concatMap f as
 
 successors :: Lts -> Process -> Action -> Set Process
 successors l p a = S.map fst . S.filter (\(_,a') -> a' == a) . M.findWithDefault S.empty p $ lts l
