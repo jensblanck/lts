@@ -149,6 +149,9 @@ processes (Lts l) = M.keysSet l
 successors :: Lts -> Process -> Action -> Set Process
 successors l p a = S.map fst . S.filter (\(_,a') -> a' == a) . M.findWithDefault S.empty p $ lts l
 
+successorSet :: Lts -> Process -> Set Action -> Set Process
+successorSet l p as = S.foldl S.union S.empty $ S.map (successors l p) as
+
 -- Cell of partition. A colouring is a partition of the processes.
 cell :: Ord a => Set (Set a) -> a -> Set a
 cell p e = S.foldr (\c s -> if e `S.member` c then c else s) S.empty p
@@ -189,5 +192,12 @@ minimiseLts l =
 valid :: Lts -> Process -> HML -> Bool
 valid _ _ (Atom b) = b
 valid l p (Box as hml) =
-  let ps = S.foldl S.union S.empty $ S.map (successors l p) as
+  let ps = successorSet l p as
   in S.foldl (&&) True (S.map (flip (valid l) hml) ps)
+valid l p (Diamond as hml) =
+  let ps = successorSet l p as
+  in S.foldl (||) False (S.map (flip (valid l) hml) ps)
+valid l p (Or h h') = valid l p h || valid l p h'
+valid l p (And h h') = valid l p h && valid l p h'
+valid l p (Neg h) = not $ valid l p h
+
