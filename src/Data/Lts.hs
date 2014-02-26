@@ -1,7 +1,8 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE NoMonomorphismRestriction,TemplateHaskell #-}
 module Data.Lts where
 
 import           Control.Applicative hiding (empty)
+import           Control.Lens
 import           Control.Monad
 import           Data.Function       (on)
 import           Data.List           (foldl', foldl1', groupBy, intercalate, reverse, sortBy)
@@ -17,14 +18,18 @@ import           Text.Parsec.String  (Parser)
 -- Lts types
 
 type Variable = String
-type Action = String
+type ActionLabel = String
 type ProcessName = String
 type Process = Set ProcessName
 type Epsilon = (Process, Process)
 type Colour = Set Process
 type Colouring = Set Colour
 
-newtype Lts = Lts {lts :: Map Process (Set (Process, Action))}
+data Arc = Arc { _destination :: Process,
+                 _label :: ActionLabel }
+makeLenses ''Arc
+
+newtype Lts = Lts {lts :: Map Process (Set (Process, ActionLabel))}
     deriving (Eq,Ord,Read,Show)
 instance Monoid Lts where
   mempty = Lts M.empty
@@ -32,10 +37,13 @@ instance Monoid Lts where
 
 type Info = (Set Process, Lts, Set Epsilon)
 
+data LTS = LTS { _lts :: Map Process (Set (Process, ActionLabel)) }
+makeLenses ''LTS
+
 --Hennessy-Milner Logic
 
-data HML = Diamond (Set Action) HML
-         | Box (Set Action) HML
+data HML = Diamond (Set ActionLabel) HML
+         | Box (Set ActionLabel) HML
          | Or HML HML
          | And HML HML
          | Neg HML
@@ -45,7 +53,7 @@ data HML = Diamond (Set Action) HML
 
 data Expr = Nil
           | Bracket Choice
-          | Act Action Expr
+          | Act ActionLabel Expr
           | Var Variable deriving (Eq,Ord,Read)
 data Rule = Rule Variable Choice deriving (Eq,Ord,Show,Read)
 type Choice = [Expr]
@@ -110,7 +118,7 @@ process = S.singleton
 variable :: Parser Variable
 variable = (:) <$> upper <*> many alphaNum <* spaces
 
-action :: Parser Action
+action :: Parser ActionLabel
 action = (:) <$> lower <*> many alphaNum <* spaces
 
 plus,open,close,ruleEnd,eqn :: Parser Char
@@ -143,7 +151,7 @@ rules = rule `sepEndBy1` ruleEnd
 defaultName :: Process -> ProcessName
 defaultName = head . S.toList
 
-alphabet :: Lts -> Set Action
+alphabet :: Lts -> Set ActionLabel
 alphabet (Lts l) = S.map snd . foldl1' S.union $ M.elems l
 
 processes :: Lts -> Set Process
@@ -158,10 +166,10 @@ arcs (Lts l) =
       f (p, es) = map (\(p', a) -> (defaultName p, defaultName p', a)) $ S.toList es
   in concatMap f as
 
-successors :: Lts -> Process -> Action -> Set Process
+successors :: Lts -> Process -> ActionLabel -> Set Process
 successors l p a = S.map fst . S.filter (\(_,a') -> a' == a) . M.findWithDefault S.empty p $ lts l
 
-successorSet :: Lts -> Process -> Set Action -> Set Process
+successorSet :: Lts -> Process -> Set ActionLabel -> Set Process
 successorSet l p as = S.foldl S.union S.empty $ S.map (successors l p) as
 
 -- Cell of partition. A colouring is a partition of the processes.
@@ -195,7 +203,7 @@ minimiseLts l =
   let as = alphabet l
       cs = iterate (minStep l) (S.singleton $ processes l)
       c = fst . head . dropWhile (\(a,b) -> a /= b) $ zip cs (tail cs)
-      f :: Process -> Action -> Set (Process, Action)
+      f :: Process -> ActionLabel -> Set (Process, ActionLabel)
       f p a = S.map (flip (,) a) . smash . colours c $ successors l (S.singleton $ S.findMin p) a
   in Lts . M.fromSet (\p -> setUnion $ S.map (f p) as) $ smash c
 
