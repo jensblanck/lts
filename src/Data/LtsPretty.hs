@@ -28,7 +28,7 @@ prettyLts :: Lts -> Doc
 prettyLts (Lts l) =
   let items = M.assocs l
       item (p, s) = prettyProcess p <> colon $$ nest 8 (vcat . map arrow $ S.toList s)
-      arrow (p, a) = prettyAction a <> text " -> " <> prettyProcess p
+      arrow (Arc p a) = prettyAction a <> text " -> " <> prettyProcess p
   in text "Lts" $$ nest 4 (vcat . map item $ items)
 
 renderLts :: Lts -> String

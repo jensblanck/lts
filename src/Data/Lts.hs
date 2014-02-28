@@ -2,7 +2,7 @@
 module Data.Lts where
 
 import           Control.Applicative hiding (empty)
-import           Control.Lens
+import           Control.Lens        hiding (Action,Choice)
 import           Control.Monad
 import           Data.Function       (on)
 import           Data.List           (foldl', foldl1', groupBy, intercalate, reverse, sortBy)
@@ -18,7 +18,7 @@ import           Text.Parsec.String  (Parser)
 -- Lts types
 
 type Variable = String
-type ActionLabel = String
+type Action = String
 type ProcessName = String
 type Process = Set ProcessName
 type Epsilon = (Process, Process)
@@ -26,24 +26,24 @@ type Colour = Set Process
 type Colouring = Set Colour
 
 data Arc = Arc { _destination :: Process,
-                 _label :: ActionLabel }
+                 _label :: Action }
+         deriving (Eq,Ord,Read,Show)
 makeLenses ''Arc
 
-newtype Lts = Lts {lts :: Map Process (Set (Process, ActionLabel))}
+newtype Lts = Lts { _lts :: Map Process (Set Arc) }
     deriving (Eq,Ord,Read,Show)
+makeIso ''Lts
+
 instance Monoid Lts where
   mempty = Lts M.empty
   mappend (Lts a) (Lts b) = Lts $ M.unionWith S.union a b
 
 type Info = (Set Process, Lts, Set Epsilon)
 
-data LTS = LTS { _lts :: Map Process (Set (Process, ActionLabel)) }
-makeLenses ''LTS
-
 --Hennessy-Milner Logic
 
-data HML = Diamond (Set ActionLabel) HML
-         | Box (Set ActionLabel) HML
+data HML = Diamond (Set Action) HML
+         | Box (Set Action) HML
          | Or HML HML
          | And HML HML
          | Neg HML
@@ -53,7 +53,7 @@ data HML = Diamond (Set ActionLabel) HML
 
 data Expr = Nil
           | Bracket Choice
-          | Act ActionLabel Expr
+          | Act Action Expr
           | Var Variable deriving (Eq,Ord,Read)
 data Rule = Rule Variable Choice deriving (Eq,Ord,Show,Read)
 type Choice = [Expr]
@@ -95,7 +95,7 @@ infoExpr v _ (Act l e) =
   let v' = process $ case e of
              (Bracket e') -> showChoice e'
              _ -> show e
-  in (S.singleton v', Lts $ M.singleton v (S.singleton (v',l)), mempty)
+  in (S.singleton v', Lts $ M.singleton v (S.singleton (Arc v' l)), mempty)
          <> infoExpr v' Nothing e
 infoExpr _ Nothing (Var v') = (S.singleton (process v'), mempty, mempty)
 infoExpr _ (Just v) (Var v') = (S.singleton (process v')
@@ -118,7 +118,7 @@ process = S.singleton
 variable :: Parser Variable
 variable = (:) <$> upper <*> many alphaNum <* spaces
 
-action :: Parser ActionLabel
+action :: Parser Action
 action = (:) <$> lower <*> many alphaNum <* spaces
 
 plus,open,close,ruleEnd,eqn :: Parser Char
@@ -151,8 +151,9 @@ rules = rule `sepEndBy1` ruleEnd
 defaultName :: Process -> ProcessName
 defaultName = head . S.toList
 
-alphabet :: Lts -> Set ActionLabel
-alphabet (Lts l) = S.map snd . foldl1' S.union $ M.elems l
+alphabet :: Lts -> Set Action
+alphabet (Lts l) = S.map (^. label) . foldl1' S.union $ M.elems l
+--alphabet = traverse . from lts
 
 processes :: Lts -> Set Process
 processes (Lts l) = M.keysSet l
@@ -163,13 +164,16 @@ nodes = map ((\n -> (head n, n)) . S.toList) . S.toList . processes
 arcs :: Lts -> [(String, String, String)]
 arcs (Lts l) =
   let as = M.assocs l
-      f (p, es) = map (\(p', a) -> (defaultName p, defaultName p', a)) $ S.toList es
+      f (p, es) = map (\(Arc p' a) -> (defaultName p, defaultName p', a)) $ S.toList es
   in concatMap f as
 
-successors :: Lts -> Process -> ActionLabel -> Set Process
-successors l p a = S.map fst . S.filter (\(_,a') -> a' == a) . M.findWithDefault S.empty p $ lts l
+successors :: Lts -> Process -> Action -> Set Process
+successors l p a = S.map _destination
+                   . S.filter (\(Arc _ a') -> a' == a)
+                   . M.findWithDefault S.empty p
+                   $ l ^. from lts
 
-successorSet :: Lts -> Process -> Set ActionLabel -> Set Process
+successorSet :: Lts -> Process -> Set Action -> Set Process
 successorSet l p as = S.foldl S.union S.empty $ S.map (successors l p) as
 
 -- Cell of partition. A colouring is a partition of the processes.
@@ -203,8 +207,11 @@ minimiseLts l =
   let as = alphabet l
       cs = iterate (minStep l) (S.singleton $ processes l)
       c = fst . head . dropWhile (\(a,b) -> a /= b) $ zip cs (tail cs)
-      f :: Process -> ActionLabel -> Set (Process, ActionLabel)
-      f p a = S.map (flip (,) a) . smash . colours c $ successors l (S.singleton $ S.findMin p) a
+      f :: Process -> Action -> Set Arc
+      f p a = S.map (\p' -> Arc p' a)
+              . smash
+              . colours c
+              $ successors l (S.singleton $ p ^?! folded) a
   in Lts . M.fromSet (\p -> setUnion $ S.map (f p) as) $ smash c
 
 -- Hennessy-Milner Logic
