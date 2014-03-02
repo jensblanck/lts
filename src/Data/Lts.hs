@@ -19,17 +19,17 @@ import           Text.Parsec.String  (Parser)
 
 type Variable = String
 type Action = String
-type ProcessName = String
-data Indices = IndexVar { _iVar :: String }
-             | IndexValue { _iValue :: Int }
+--type ProcessName = String
+data Indices = IndexVar String
+             | IndexValue Int
                deriving (Eq,Ord,Read,Show)
-makeLenses ''Indices                          -- creates Prisms
-{-
+makePrisms ''Indices
+--{-
 data ProcessName = ProcName { _prefixes :: [String]
                             , _procName :: String
-                            , _indices  :: [Indeces] } deriving (Eq,Ord,Read,Show)
+                            , _indices  :: [Indices] } deriving (Eq,Ord,Read,Show)
 makeLenses ''ProcessName
--}
+---}
 type Process = Set ProcessName
 type Epsilon = (Process, Process)
 type Colour = Set Process
