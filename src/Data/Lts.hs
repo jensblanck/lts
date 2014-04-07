@@ -216,9 +216,9 @@ minimiseLts :: Lts -> Lts
 minimiseLts l =
   let as = alphabet l
       cs = iterate (minStep l) (S.singleton $ processes l)
-      c = fst . head . dropWhile (\(a,b) -> a /= b) $ zip cs (tail cs)
+      c = fst . head . dropWhile (uncurry (/=)) $ zip cs (tail cs)
       f :: Process -> Action -> Set Arc
-      f p a = S.map (\p' -> Arc p' a)
+      f p a = S.map (`Arc` a)
               . smash
               . colours c
               $ successors l (S.singleton $ p ^?! folded) a

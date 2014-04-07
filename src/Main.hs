@@ -44,7 +44,7 @@ main = do
 
 test = do
   f <- readFile "test.lts"
-  let g = fmap convert $ parseLts "" f
+  let g = convert <$> parseLts "" f
   let l = either undefined id g
   --print l
   print $ minStep l (S.singleton $ processes l)
