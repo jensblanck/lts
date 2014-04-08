@@ -2,8 +2,10 @@
 -- | Main entry point to the application.
 module Main where
 
+--import           Control.Applicative
 import           Control.Monad
 import           Data.Either
+import           Data.Functor
 import           Data.Maybe             (fromMaybe, isJust)
 import           Data.Set               (Set)
 import qualified Data.Set               as S
