@@ -2,8 +2,10 @@
 -- | Main entry point to the application.
 module Main where
 
+--import           Control.Applicative
 import           Control.Monad
 import           Data.Either
+import           Data.Functor
 import           Data.Maybe             (fromMaybe, isJust)
 import           Data.Set               (Set)
 import qualified Data.Set               as S
@@ -44,7 +46,7 @@ main = do
 
 test = do
   f <- readFile "test.lts"
-  let g = fmap convert $ parseLts "" f
+  let g = convert <$> parseLts "" f
   let l = either undefined id g
   --print l
   print $ minStep l (S.singleton $ processes l)

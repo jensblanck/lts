@@ -11,7 +11,7 @@ import           Data.Lts
 
 main = do
   f <- readFile "test.lts"
-  let g = fmap convert $ parseLts "" f
+  let g = convert <$> parseLts "" f
   let l = either undefined id g
   let gr = graphElemsToDot defaultParams
                            (nodes l)
