@@ -5,7 +5,7 @@ import           Control.Applicative hiding (empty)
 import           Control.Lens        hiding (Action,Choice)
 import           Control.Monad
 import           Data.Function       (on)
-import           Data.List           (foldl', foldl1', groupBy, intercalate, reverse, sortBy)
+import           Data.List           (foldl', foldl1', groupBy, intercalate, partition, reverse, sortBy)
 import           Data.Map            (Map, (!))
 import qualified Data.Map            as M
 import           Data.Maybe          (fromMaybe)
@@ -18,26 +18,31 @@ import           Text.Parsec.String  (Parser)
 -- Lts types
 
 type Variable = String
-type Action = String
---type ProcessName = String
-data Indices = IndexVar String
-             | IndexValue Int
-               deriving (Eq,Ord,Read,Show)
-makePrisms ''Indices
---{-
-data ProcessName = ProcName { _prefixes :: [String]
-                            , _procName :: String
-                            , _indices  :: [Indices] } deriving (Eq,Ord,Read,Show)
-makeLenses ''ProcessName
----}
-type Process = Set ProcessName
+data Item = ItemInt Int | ItemStr String deriving (Eq,Ord,Read,Show)
+makePrisms ''Item
+type Collection = [Item]
+data Binding = Binding { _varName :: Variable
+                       , _varValue :: Collection } deriving (Eq,Ord,Read,Show)
+makeLenses ''Binding
+data Decoration = DecVar String
+                | DecValue Int
+                | DecColl Collection
+                | DecBind Binding
+                  deriving (Eq,Ord,Read,Show)
+makePrisms ''Decoration
+data Name = Name { _name :: String
+                 , _annotation  :: [Decoration]
+                 , _indices :: [Decoration] } deriving (Eq,Ord,Read,Show)
+makeLenses ''Name
+type Process = Set Name
+type Action = Name
 type Epsilon = (Process, Process)
 type Colour = Set Process
 type Colouring = Set Colour
 
-data Arc = Arc { _destination :: Process,
-                 _label :: Action }
-         deriving (Eq,Ord,Read,Show)
+data Arc = Arc { _destination :: Process
+               , _label :: Action }
+           deriving (Eq,Ord,Read,Show)
 makeLenses ''Arc
 
 newtype Lts = Lts { _lts :: Map Process (Set Arc) }
@@ -64,17 +69,28 @@ data HML = Diamond (Set Action) HML
 data Expr = Nil
           | Bracket Choice
           | Act Action Expr
-          | Var Variable deriving (Eq,Ord,Read)
-data Rule = Rule Variable Choice deriving (Eq,Ord,Show,Read)
+          | Var Name deriving (Eq,Ord,Read)
+data Rule = Rule Name Choice deriving (Eq,Ord,Show,Read)
 type Choice = [Expr]
 
 instance Show Expr where
   show Nil = "0"
   show (Bracket e) = "(" ++ showChoice e ++ ")"
-  show (Act l e) = l ++ ('.' : show e)
-  show (Var v) = v
+  show (Act l e) = show l ++ ('.' : show e)
+  show (Var v) = show v
 
 showChoice = intercalate "+" . map show
+
+-- help to define processes
+
+process :: Name -> Process
+process = S.singleton
+
+process' :: Variable -> Process
+process' v = process $ Name v [] []
+
+nilProcess :: Process
+nilProcess = process' "0"
 
 -- Parsing lts equations
 
@@ -97,12 +113,12 @@ infoRule (Rule v e) =
   mconcat $ (S.singleton (process v), mempty, mempty) : map (infoExpr (process v) (Just $ process v)) e
 
 infoExpr :: Process -> Maybe Process -> Expr -> Info
-infoExpr _ _ Nil = (S.singleton (process "0"), mempty, mempty)
+infoExpr _ _ Nil = (S.singleton nilProcess, mempty, mempty)
 infoExpr v mv (Bracket e) =
-  let mv' = Just $ fromMaybe (process $ showChoice e) mv
+  let mv' = Just $ fromMaybe (process' $ showChoice e) mv
   in mconcat $ map (infoExpr v mv') e
 infoExpr v _ (Act l e) =
-  let v' = process $ case e of
+  let v' = process' $ case e of
              (Bracket e') -> showChoice e'
              _ -> show e
   in (S.singleton v', Lts $ M.singleton v (S.singleton (Arc v' l)), mempty)
@@ -120,16 +136,59 @@ satisfyEpsilon i@(ps, a, es) =
                                          (M.lookup p' m)
   in if a == a' then i else satisfyEpsilon (ps, a', es)
 
-process :: ProcessName -> Process
-process = S.singleton
-
 -- Parsing using applicative style
 
-variable :: Parser Variable
-variable = (:) <$> upper <*> many alphaNum <* spaces
+variable :: Parser Char -> Parser Variable
+variable p = (:) <$> p <*> many alphaNum <* spaces
+
+varUpper,varLower,varLetter :: Parser Variable
+varUpper = variable upper
+varLower = variable lower
+varLetter = variable letter
+
+natural :: Parser String
+natural = many1 digit
+
+item :: Parser Item
+item = ItemInt . read <$> natural <* notFollowedBy alphaNum
+       <|> ItemStr <$> many1 alphaNum
+
+intRange :: Parser Collection
+intRange =
+    let f m n = map ItemInt [read m..read n]
+    in f <$> natural <* char '.' <* char '.' <*> natural
+
+setNotation :: Parser Collection
+setNotation = char '{' *> item `sepBy1` (char ',' <* spaces) <* char '}'
+
+collection :: Parser Collection
+collection = setNotation <|> intRange
+
+binding :: Parser Binding
+binding = Binding <$> varLetter <* char ':' <*> collection
+
+decoration :: Parser Decoration
+decoration = try (DecBind <$> binding)
+             <|> try (DecColl <$> collection)
+             <|> try (DecValue . read <$> natural)
+             <|> DecVar <$> varLetter
+
+decorations :: Parser ([Decoration], [Decoration])
+decorations = f <$> many ((,) <$> char '^' <*> decoration
+                          <|> (,) <$> char '_' <*> decoration)
+    where f = g . partition ((== '^') . fst)
+          g (as,bs) = (map snd as, map snd bs)
+
+decName :: Parser Variable -> Parser Name
+decName p = (\n (a,i) -> Name n a i) <$> p <*> decorations
+
+decNameUpper,decNameLower,decNameLetter :: Parser Name
+decNameUpper = decName varUpper
+decNameLower = decName varLower
+decNameLetter = decName varLetter
 
 action :: Parser Action
-action = (:) <$> lower <*> many alphaNum <* spaces
+action = decNameLower
 
 plus,open,close,ruleEnd,eqn :: Parser Char
 plus = char '+' <* spaces
@@ -146,19 +205,19 @@ choice' = expr `sepBy` plus
 expr,inBrackets,constant,actExpr,nilExpr :: Parser Expr
 expr = inBrackets <|> nilExpr <|> actExpr <|> constant
 inBrackets = Bracket <$> bracketedChoice
-constant = Var <$> variable <* spaces
+constant = Var <$> decNameUpper <* spaces
 actExpr = Act <$> action <* char '.' <* spaces <*> expr
 nilExpr = Nil <$ char '0' <* spaces
 
 rule :: Parser Rule
-rule = Rule <$> (spaces *> variable) <* eqn <*> choice
+rule = Rule <$> (spaces *> decNameUpper <* spaces) <* eqn <*> choice
 
 rules :: Parser [Rule]
 rules = rule `sepEndBy1` ruleEnd
 
 -- Lts manipulation
 
-defaultName :: Process -> ProcessName
+defaultName :: Process -> Name
 defaultName = head . S.toList
 
 alphabet :: Lts -> Set Action
@@ -168,10 +227,10 @@ alphabet (Lts l) = S.map (^. label) . foldl1' S.union $ M.elems l
 processes :: Lts -> Set Process
 processes (Lts l) = M.keysSet l
 
-nodes :: Lts -> [(String, [String])]
+nodes :: Lts -> [(Name, [Name])]
 nodes = map ((\n -> (head n, n)) . S.toList) . S.toList . processes
 
-arcs :: Lts -> [(String, String, String)]
+arcs :: Lts -> [(Name, Name, Action)]
 arcs (Lts l) =
   let as = M.assocs l
       f (p, es) = map (\(Arc p' a) -> (defaultName p, defaultName p', a)) $ S.toList es
@@ -237,4 +296,3 @@ valid l p (Diamond as hml) =
 valid l p (Or h h') = valid l p h || valid l p h'
 valid l p (And h h') = valid l p h && valid l p h'
 valid l p (Neg h) = not $ valid l p h
-

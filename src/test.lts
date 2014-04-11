@@ -1,5 +1,5 @@
 Y=a.0;
-A=a.A+b.B;
+A=a.A + b.B;
 B= b.0;
 E=a.(b.0+c.0);
 F = a.b.0+a.c.0;
