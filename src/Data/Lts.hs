@@ -152,7 +152,7 @@ rules :: Parser [Rule]
 rules = rule `sepEndBy1` ruleEnd
 
 -- Lts manipulation
-{-
+
 defaultName :: Process -> PName
 defaultName = head . S.toList
 
@@ -163,10 +163,10 @@ alphabet (Lts l) = S.map (^. label) . foldl1' S.union $ M.elems l
 processes :: Lts -> Set Process
 processes (Lts l) = M.keysSet l
 
-nodes :: Lts -> [(Name, [Name])]
+nodes :: Lts -> [(PName, [PName])]
 nodes = map ((\n -> (head n, n)) . S.toList) . S.toList . processes
 
-arcs :: Lts -> [(Name, Name, Action)]
+arcs :: Lts -> [(PName, PName, Action)]
 arcs (Lts l) =
   let as = M.assocs l
       f (p, es) = map (\(Arc p' a) -> (defaultName p, defaultName p', a)) $ S.toList es
@@ -232,4 +232,3 @@ valid l p (Diamond as hml) =
 valid l p (Or h h') = valid l p h || valid l p h'
 valid l p (And h h') = valid l p h && valid l p h'
 valid l p (Neg h) = not $ valid l p h
--}
