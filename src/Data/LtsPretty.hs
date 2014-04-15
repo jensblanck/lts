@@ -48,3 +48,12 @@ prettyLts (Lts l) =
 
 renderLts :: Lts -> String
 renderLts = render . prettyLts
+
+prettyExpr :: Expr -> Doc
+prettyExpr Nil = text "0"
+prettyExpr (Bracket e) = char '(' <> (hcat $ punctuate (char '+') (map prettyExpr e)) <> char ')'
+prettyExpr (Act l e) = prettyAction l <> char '.' <> prettyExpr e
+prettyExpr (Var v) = prettyPName v
+
+renderExpr :: Expr -> String
+renderExpr = render . prettyExpr

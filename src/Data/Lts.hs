@@ -19,27 +19,6 @@ import           Text.PrettyPrint    (render)
 import Data.LtsTypes
 import Data.LtsPretty
 
---Parsing types
-
-data Expr = Nil
-          | Bracket Choice
-          | Act Action Expr
-          | Var PName deriving (Eq,Ord,Read)
-
-instance Show Expr where
-  show Nil = "0"
-  show (Bracket e) = "(" ++ showChoice e ++ ")"
-  show (Act l e) = (render $ prettyAction l) ++ ('.' : show e)
-  show (Var v) = render $ prettyPName v
-
-showChoice = intercalate "+" . map show
-
-data Rule = Rule PName Choice deriving (Eq,Ord,Read,Show)
-type Choice = [Expr]
-
-makePrisms ''Expr
-makePrisms ''Rule
-
 -- help to define processes
 
 process :: PName -> Process
@@ -73,13 +52,11 @@ infoRule (Rule v e) =
 
 infoExpr :: Process -> Maybe Process -> Expr -> Info
 infoExpr _ _ Nil = (S.singleton nilProcess, mempty, mempty)
-infoExpr v mv (Bracket e) =
-  let mv' = Just $ fromMaybe (process' $ showChoice e) mv
+infoExpr v mv e'@(Bracket e) =
+  let mv' = Just $ fromMaybe (process' $ renderExpr e') mv
   in mconcat $ map (infoExpr v mv') e
 infoExpr v _ (Act l e) =
-  let v' = process' $ case e of
-             (Bracket e') -> showChoice e'
-             _ -> show e
+  let v' = process' $ renderExpr e
   in (S.singleton v', Lts $ M.singleton v (S.singleton (Arc v' l)), mempty)
          <> infoExpr v' Nothing e
 infoExpr _ Nothing (Var v') = (S.singleton (process v'), mempty, mempty)

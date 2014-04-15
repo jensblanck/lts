@@ -39,6 +39,19 @@ data Arc = Arc { _destination :: Process
 newtype Lts = Lts { _lts :: Map Process (Set Arc) }
     deriving (Eq,Ord,Read,Show)
 
+--Parsing types
+
+data Expr = Nil
+          | Bracket Choice
+          | Act Action Expr
+          | Var PName deriving (Eq,Ord,Read,Show)
+data Rule = Rule PName Choice deriving (Eq,Ord,Read,Show)
+type Choice = [Expr]
+
+makePrisms ''Expr
+makePrisms ''Rule
+
+
 makePrisms ''Item
 makeLenses ''Binding
 makePrisms ''Decoration
