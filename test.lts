@@ -8,3 +8,4 @@ Y = b.0;
 Y=a.0;
 Z=a.(E+F);
 H=G;
+Clock_i:0..3 = Clock_i;

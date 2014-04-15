@@ -7,7 +7,7 @@ import           Data.Set            (Set)
 import qualified Data.Set            as S
 import           Text.PrettyPrint
 
-import           Data.Lts
+import           Data.LtsTypes
 
 -- Lts pretty print
 
@@ -27,11 +27,16 @@ prettyDecorations c ds = char c <> hcat (punctuate comma $ map f ds)
           prettyItem (ItemInt n) = int n
           prettyItem (ItemStr s) = text s
 
+prettyPName :: PName -> Doc
+prettyPName (PSingle n) = prettyName n
+prettyPName (PChoice ns) = hcat . punctuate (char '+') $ map prettyPName ns
+prettyPName (PAct as n) = (hcat . punctuate (char '.') $ map prettyAction as) <> prettyPName n
+
 prettyProcess :: Process -> Doc
 prettyProcess p = (if S.size p == 1 then id else braces) 
                 . hcat 
                 . punctuate comma
-                . map prettyName
+                . map prettyPName
                 . S.toList $ p
 
 prettyLts :: Lts -> Doc

@@ -12,82 +12,41 @@ import           Data.Maybe          (fromMaybe)
 import           Data.Monoid
 import           Data.Set            (Set)
 import qualified Data.Set            as S
-import           Text.Parsec         hiding (choice, many, optional, (<|>))
+import           Text.Parsec         hiding (choice, label, many, optional, (<|>))
 import           Text.Parsec.String  (Parser)
+import           Text.PrettyPrint    (render)
 
--- Lts types
-
-type Variable = String
-data Item = ItemInt Int | ItemStr String deriving (Eq,Ord,Read,Show)
-makePrisms ''Item
-type Collection = [Item]
-data Binding = Binding { _varName :: Variable
-                       , _varValue :: Collection } deriving (Eq,Ord,Read,Show)
-makeLenses ''Binding
-data Decoration = DecVar String
-                | DecValue Int
-                | DecColl Collection
-                | DecBind Binding
-                  deriving (Eq,Ord,Read,Show)
-makePrisms ''Decoration
-data Name = Name { _name :: String
-                 , _annotation  :: [Decoration]
-                 , _indices :: [Decoration] } deriving (Eq,Ord,Read,Show)
-makeLenses ''Name
-type Process = Set Name
-type Action = Name
-type Epsilon = (Process, Process)
-type Colour = Set Process
-type Colouring = Set Colour
-
-data Arc = Arc { _destination :: Process
-               , _label :: Action }
-           deriving (Eq,Ord,Read,Show)
-makeLenses ''Arc
-
-newtype Lts = Lts { _lts :: Map Process (Set Arc) }
-    deriving (Eq,Ord,Read,Show)
-makeIso ''Lts
-
-instance Monoid Lts where
-  mempty = Lts M.empty
-  mappend (Lts a) (Lts b) = Lts $ M.unionWith S.union a b
-
-type Info = (Set Process, Lts, Set Epsilon)
-
---Hennessy-Milner Logic
-
-data HML = Diamond (Set Action) HML
-         | Box (Set Action) HML
-         | Or HML HML
-         | And HML HML
-         | Neg HML
-         | Atom Bool deriving (Eq,Ord,Read,Show)
+import Data.LtsTypes
+import Data.LtsPretty
 
 --Parsing types
 
 data Expr = Nil
           | Bracket Choice
           | Act Action Expr
-          | Var Name deriving (Eq,Ord,Read)
-data Rule = Rule Name Choice deriving (Eq,Ord,Show,Read)
-type Choice = [Expr]
+          | Var PName deriving (Eq,Ord,Read)
 
 instance Show Expr where
   show Nil = "0"
   show (Bracket e) = "(" ++ showChoice e ++ ")"
-  show (Act l e) = show l ++ ('.' : show e)
-  show (Var v) = show v
+  show (Act l e) = (render $ prettyAction l) ++ ('.' : show e)
+  show (Var v) = render $ prettyPName v
 
 showChoice = intercalate "+" . map show
 
+data Rule = Rule PName Choice deriving (Eq,Ord,Read,Show)
+type Choice = [Expr]
+
+makePrisms ''Expr
+makePrisms ''Rule
+
 -- help to define processes
 
-process :: Name -> Process
+process :: PName -> Process
 process = S.singleton
 
 process' :: Variable -> Process
-process' v = process $ Name v [] []
+process' v = process . PSingle $ Name v [] []
 
 nilProcess :: Process
 nilProcess = process' "0"
@@ -205,19 +164,19 @@ choice' = expr `sepBy` plus
 expr,inBrackets,constant,actExpr,nilExpr :: Parser Expr
 expr = inBrackets <|> nilExpr <|> actExpr <|> constant
 inBrackets = Bracket <$> bracketedChoice
-constant = Var <$> decNameUpper <* spaces
+constant = Var . PSingle <$> decNameUpper <* spaces
 actExpr = Act <$> action <* char '.' <* spaces <*> expr
 nilExpr = Nil <$ char '0' <* spaces
 
 rule :: Parser Rule
-rule = Rule <$> (spaces *> decNameUpper <* spaces) <* eqn <*> choice
+rule = Rule <$> (PSingle <$> (spaces *> decNameUpper <* spaces)) <* eqn <*> choice
 
 rules :: Parser [Rule]
 rules = rule `sepEndBy1` ruleEnd
 
 -- Lts manipulation
-
-defaultName :: Process -> Name
+{-
+defaultName :: Process -> PName
 defaultName = head . S.toList
 
 alphabet :: Lts -> Set Action
@@ -296,3 +255,4 @@ valid l p (Diamond as hml) =
 valid l p (Or h h') = valid l p h || valid l p h'
 valid l p (And h h') = valid l p h && valid l p h'
 valid l p (Neg h) = not $ valid l p h
+-}
