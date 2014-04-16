@@ -1,4 +1,4 @@
-{-# LANGUAGE NoMonomorphismRestriction,TemplateHaskell #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 module Data.Lts where
 
 import           Control.Applicative hiding (empty)
