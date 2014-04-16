@@ -32,18 +32,16 @@ nilProcess = process' "0"
 
 -- Parsing lts equations
 
-parseLts :: SourceName -> String -> Either ParseError [Rule]
+parseLts :: SourceName -> String -> Either ParseError AST
 parseLts = parse rules
 
-convert :: [Rule] -> Lts
+convert :: AST -> Lts
 convert = addZeros . satisfyEpsilon . info
 
 addZeros :: Info -> Lts
 addZeros (s,Lts l,_) = Lts $ l <> M.fromSet (const mempty) s
--- fromSet s
---   where fromSet s = M.fromList . S.toList . S.map (\k -> (k, S.empty)) $ s
 
-info :: [Rule] -> Info
+info :: AST -> Info
 info = mconcat . map infoRule
 
 infoRule :: Rule -> Info
@@ -148,7 +146,7 @@ nilExpr = Nil <$ char '0' <* spaces
 rule :: Parser Rule
 rule = Rule <$> (PSingle <$> (spaces *> decNameUpper <* spaces)) <* eqn <*> choice
 
-rules :: Parser [Rule]
+rules :: Parser AST
 rules = rule `sepEndBy1` ruleEnd
 
 -- Lts manipulation
@@ -158,7 +156,6 @@ defaultName = head . S.toList
 
 alphabet :: Lts -> Set Action
 alphabet (Lts l) = S.map (^. label) . foldl1' S.union $ M.elems l
---alphabet = traverse . from lts
 
 processes :: Lts -> Set Process
 processes (Lts l) = M.keysSet l
@@ -168,15 +165,14 @@ nodes = map ((\n -> (head n, n)) . S.toList) . S.toList . processes
 
 arcs :: Lts -> [(PName, PName, Action)]
 arcs (Lts l) =
-  let as = M.assocs l
-      f (p, es) = map (\(Arc p' a) -> (defaultName p, defaultName p', a)) $ S.toList es
-  in concatMap f as
+  let f (p, es) = map (\(Arc p' a) -> (defaultName p, defaultName p', a)) $ S.toList es
+  in concatMap f $ M.assocs l
 
 successors :: Lts -> Process -> Action -> Set Process
-successors l p a = S.map _destination
-                   . S.filter (\(Arc _ a') -> a' == a)
-                   . M.findWithDefault S.empty p
-                   $ l ^. from lts
+successors (Lts l) p a = S.map _destination
+                       . S.filter (\(Arc _ a') -> a' == a)
+                       . M.findWithDefault S.empty p
+                        $ l
 
 successorSet :: Lts -> Process -> Set Action -> Set Process
 successorSet l p as = S.foldl S.union S.empty $ S.map (successors l p) as

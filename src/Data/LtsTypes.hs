@@ -47,6 +47,7 @@ data Expr = Nil
           | Var PName deriving (Eq,Ord,Read,Show)
 data Rule = Rule PName Choice deriving (Eq,Ord,Read,Show)
 type Choice = [Expr]
+type AST = [Rule]
 
 makePrisms ''Expr
 makePrisms ''Rule
