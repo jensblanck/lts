@@ -2,17 +2,14 @@
 -- | Main entry point to the application.
 module Main where
 
---import           Control.Applicative
 import           Control.Monad
-import           Data.Either
-import           Data.Functor
 import           Data.Maybe             (fromMaybe, isJust)
-import           Data.Set               (Set)
 import qualified Data.Set               as S
 import           System.Console.CmdArgs
 import           System.IO
 
 import           Data.Lts
+import           Data.LtsTypes
 import           Data.LtsPretty
 
 -- CmdArgs
@@ -21,6 +18,7 @@ data Files = Files {input  :: Maybe FilePath
                    ,output :: Maybe FilePath}
              deriving (Show, Data, Typeable, Eq)
 
+files :: Files
 files = Files {input = def
               ,output = def}
 
@@ -44,6 +42,7 @@ main = do
 
 --
 
+test :: IO Lts
 test = do
   f <- readFile "test.lts"
   let g = convert <$> parseLts "" f

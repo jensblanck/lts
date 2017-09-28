@@ -36,7 +36,7 @@ data Arc = Arc { _destination :: Process
                , _label :: Action }
            deriving (Eq,Ord,Read,Show)
 
-newtype Lts = Lts { _lts :: Map Process (Set Arc) }
+newtype Lts = Lts { _getLts :: Map Process (Set Arc) }
     deriving (Eq,Ord,Read,Show)
 
 --Parsing types
@@ -59,7 +59,7 @@ makePrisms ''Decoration
 makeLenses ''Name
 makePrisms ''PName
 makeLenses ''Arc
-makeIso ''Lts
+makeLenses ''Lts
 
 instance Monoid Lts where
   mempty = Lts M.empty
