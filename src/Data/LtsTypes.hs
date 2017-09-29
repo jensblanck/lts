@@ -1,12 +1,9 @@
 {-# LANGUAGE NoMonomorphismRestriction,TemplateHaskell #-}
 module Data.LtsTypes where
 
-import           Control.Applicative hiding (empty)
-import           Control.Lens        hiding (Action,Choice)
-import           Control.Monad
-import           Data.Map            (Map, (!))
+import           Control.Lens        hiding (Choice)
+import           Data.Map            (Map)
 import qualified Data.Map            as M
-import           Data.Monoid
 import           Data.Set            (Set)
 import qualified Data.Set            as S
 

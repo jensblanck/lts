@@ -2,11 +2,9 @@
 module Data.Lts where
 
 import           Control.Applicative hiding (empty)
-import           Control.Lens        hiding (Action,Choice)
-import           Control.Monad
-import           Data.Function       (on)
-import           Data.List           (foldl', foldl1', groupBy, intercalate, partition, reverse, sortBy)
-import           Data.Map            (Map, (!))
+import           Control.Lens        hiding (Choice)
+import           Data.List           (foldl1', partition)
+import           Data.Map            (Map)
 import qualified Data.Map            as M
 import           Data.Maybe          (fromMaybe)
 import           Data.Monoid
@@ -14,7 +12,6 @@ import           Data.Set            (Set)
 import qualified Data.Set            as S
 import           Text.Parsec         hiding (choice, label, many, optional, (<|>))
 import           Text.Parsec.String  (Parser)
-import           Text.PrettyPrint    (render)
 
 import Data.LtsTypes
 import Data.LtsPretty
@@ -65,9 +62,9 @@ infoExpr _ (Just v) (Var v') = (S.singleton (process v')
 satisfyEpsilon :: Info -> Info
 satisfyEpsilon i@(ps, a, es) =
   let a' = S.fold copy a es
-      copy (p,p') a@(Lts m) = a <> (Lts . maybe M.empty
-                                                (M.singleton p))
-                                         (M.lookup p' m)
+      copy (p,p') _a@(Lts m) = _a <> (Lts . maybe M.empty
+                                       (M.singleton p))
+                                     (M.lookup p' m)
   in if a == a' then i else satisfyEpsilon (ps, a', es)
 
 -- Parsing using applicative style

@@ -16,11 +16,18 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Main, Data.LtsTypes, Data.Lts, Data.LtsPretty
+  exposed-modules:     Data.LtsTypes, Data.Lts, Data.LtsPretty
   -- Data.LtsGraph, 
   -- other-modules:       
   other-extensions:    DeriveDataTypeable, NoMonomorphismRestriction, TemplateHaskell
-  build-depends:       base, containers, cmdargs, lens, parsec, pretty
+  build-depends:       base, containers, lens, parsec, pretty
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -Wall
+
+Executable examples
+  hs-source-dirs:      examples
+  main-is:             Main.hs
+  build-depends:
+    base, containers, cmdargs, lens, parsec, pretty, lts
+  default-language: Haskell2010

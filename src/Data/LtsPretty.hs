@@ -1,9 +1,6 @@
 module Data.LtsPretty where
 
-import           Control.Applicative hiding (empty)
-import           Data.Map            (Map, (!))
 import qualified Data.Map            as M
-import           Data.Set            (Set)
 import qualified Data.Set            as S
 import           Text.PrettyPrint
 
@@ -22,8 +19,8 @@ prettyDecorations _ [] = empty
 prettyDecorations c ds = char c <> hcat (punctuate comma $ map f ds)
     where f (DecVar s) = text s
           f (DecValue n) = int n
-          f (DecColl c) = hcat $ map prettyItem c
-          f (DecBind (Binding v c)) = text v <> colon <> hcat (map prettyItem c)
+          f (DecColl _c) = hcat $ map prettyItem _c
+          f (DecBind (Binding v _c)) = text v <> colon <> hcat (map prettyItem _c)
           prettyItem (ItemInt n) = int n
           prettyItem (ItemStr s) = text s
 
